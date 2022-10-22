@@ -2,18 +2,19 @@ package com.utn.dabd.tpi.blackjack.services.impl;
 
 import com.utn.dabd.tpi.blackjack.dto.JugadaDTO;
 import com.utn.dabd.tpi.blackjack.dto.TipoJugador;
-import com.utn.dabd.tpi.blackjack.juego.Juego;
-import com.utn.dabd.tpi.blackjack.model.Baraja;
-import com.utn.dabd.tpi.blackjack.model.Carta;
-import com.utn.dabd.tpi.blackjack.model.Jugada;
-import com.utn.dabd.tpi.blackjack.model.Resultados;
+import com.utn.dabd.tpi.blackjack.entities.Carta;
+import com.utn.dabd.tpi.blackjack.entities.Jugada;
+import com.utn.dabd.tpi.blackjack.entities.JugadaPorCarta;
+import com.utn.dabd.tpi.blackjack.dto.Resultados;
+import com.utn.dabd.tpi.blackjack.services.CartaService;
 import com.utn.dabd.tpi.blackjack.services.JuegoService;
+import com.utn.dabd.tpi.blackjack.services.JugadaPorCartaService;
 import com.utn.dabd.tpi.blackjack.services.JugadaService;
+import com.utn.dabd.tpi.blackjack.services.PlayerService;
+import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Objects;
-import java.util.stream.Collectors;
+import javax.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -21,138 +22,106 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class JuegoServiceImpl implements JuegoService{
     
-    private final Juego juego = new Juego();
-    private final Baraja baraja = new Baraja();
-
     private final JugadaService jugadaService;
+    private final JugadaPorCartaService jugadaPorCartaService;
+    private final CartaService cartaService;
+    private final PlayerService playerService; 
     
+    @Transactional
     @Override
-    public JugadaDTO iniciarJugada(String userName) {
+    public JugadaDTO iniciarJugada(Long userId) {
+        // Valido que exista el id de usuario
+        playerService.getPlayerById(userId);
         // obtener ultima jugada activa del jugador
-        Jugada jugada = obtenerJugadaActiva(userName);
+        Jugada jugada = jugadaService.recuperarJugadaActiva(userId, 
+                Resultados.EN_JUEGO);
         
         if(jugada == null) {
             //crear nueva jugada
-            jugada = Jugada.builder()
-                    .id((long)(Math.random()*999999 + 1))
-                    .jugador(userName)
-                    .resultado(Resultados.EN_JUEGO)
-                    .cartasJugador(new ArrayList())
-                    .cartasCroupier(new ArrayList())
-                    .build();
+            Jugada jugadaToCreate = new Jugada();
+            jugadaToCreate.setFecha(LocalDate. now());
+            jugadaToCreate.setIdPlayer(userId);
+            jugadaToCreate.setResultado(Resultados.EN_JUEGO);
             
-            // agregar cartas al jugador
-            Carta carta1Jug = pedirCarta(jugada);
-            jugada.getCartasJugador().add(carta1Jug);
-            
-            Carta carta2Jug = pedirCarta(jugada);
-            jugada.getCartasJugador().add(carta2Jug);
+            jugada = jugadaService.crearJugada(jugadaToCreate);
             
             // agrego carta al groupier
-            List<Carta> cartasCr = new ArrayList();
-            cartasCr.add(iniciarCroupier());
-            jugada.setCartasCroupier(cartasCr);
+            darCarta(jugada.getId(), TipoJugador.C);
+            
+            // agregar cartas al jugador
+            darCarta(jugada.getId(), TipoJugador.J);
+            darCarta(jugada.getId(), TipoJugador.J);
         }
-        return this.crearResponse(jugada);
+        
+        List<JugadaPorCarta> jugadaCartas = 
+                jugadaPorCartaService.getAllCartasPorJugada(jugada.getId());
+        
+        return generarResponse(jugadaCartas, jugada.getId(), Resultados.EN_JUEGO);
     }
     
+    @Transactional
     @Override
     public JugadaDTO pedirCarta(Long idJugada) {
-        Jugada jugada = getJugadaById(idJugada);
-        if(jugada == null) {
-            return null;
-        }
         // agregar cartas al jugador
-        Carta cartaJug = pedirCarta(jugada);
-        jugada.getCartasJugador().add(cartaJug);
+        darCarta(idJugada, TipoJugador.J);
+        List<JugadaPorCarta> jugadaCartas = 
+                jugadaPorCartaService.getAllCartasPorJugada(idJugada);
         
-        List<Integer> totalJug = jugadaService.getTotales(jugada, TipoJugador.JUGADOR);
+        List<Long> cartasJug = new ArrayList();
+        
+        for(JugadaPorCarta j : jugadaCartas) {
+            if(j.getDe().equals(TipoJugador.J)) {
+                cartasJug.add(j.getIdCarta());
+            }
+        }
+        List<Carta> cartasJugador = cartaService.obtenerCartasPorIds(cartasJug);
+        
+        List<Integer> totalJug = getTotales(cartasJugador);
         
         if(this.seguirJugando(totalJug)) {
-            return this.crearResponse(jugada);
+            return generarResponse(jugadaCartas, idJugada, Resultados.EN_JUEGO);
         } else {
-            juego.getJugadas().add(jugada);
             return this.rendirse(idJugada);
         }
     }
     
+    @Transactional
     @Override
     public JugadaDTO rendirse(Long idJugada) {
-        Jugada jugada = getJugadaById(idJugada);
-        if(jugada == null) {
-            return null;
-        }
-        this.pedirCartaCroupier(jugada);
+        // pedir carta para Croupier
+        this.pedirCartaCroupier(idJugada);
         
-        return this.finalizarJuego(jugada);
+        List<JugadaPorCarta> jugadasFinal = 
+                jugadaPorCartaService.getAllCartasPorJugada(idJugada);
+        return finalizarJuego(jugadasFinal, idJugada);
+        
     }
     
-    private void pedirCartaCroupier(Jugada jugada) {
-        Carta cartaCr = pedirCarta(jugada);
-        jugada.getCartasCroupier().add(cartaCr);
-        
-        if(this.croupierSiguePidiendo(jugada)) {
-            this.pedirCartaCroupier(jugada);
+    private Long darCarta(Long idJugada, TipoJugador de) {
+        boolean yaSalioCarta = true;
+        Long carta = null;
+        while(yaSalioCarta) {
+            carta = (long)(Math.random()* 52 + 1);
+            yaSalioCarta = jugadaPorCartaService.salioCartaEnJugada(idJugada, carta);
         }
+        JugadaPorCarta jxc = new JugadaPorCarta();
+        jxc.setIdJugada(idJugada);
+        jxc.setIdCarta(carta);
+        jxc.setDe(de);
+        
+        jugadaPorCartaService.guardarCartaPorJugada(jxc);
+        return carta;
     }
     
-    private Jugada getJugadaById(Long id) {
-        Jugada jugadaActiva = null;
+    private void pedirCartaCroupier(Long idJugada) {
+        darCarta(idJugada, TipoJugador.C);
         
-        Iterator<Jugada> iter = juego.getJugadas().iterator();
-        while(iter.hasNext()){
-            Jugada j = iter.next();
-            if(Objects.equals(j.getId(), id) 
-                    && j.getResultado().equals(Resultados.EN_JUEGO)) {
-                jugadaActiva = j;
-                iter.remove();
-            }
-        }
+        List<JugadaPorCarta> jugadaCartas = 
+                jugadaPorCartaService.getAllCartasPorJugada(idJugada);
         
-        return jugadaActiva;
-    }
-    
-    private Jugada obtenerJugadaActiva(String userName) {
-        Jugada jugadaActiva = null;
-        
-        Iterator<Jugada> iter = juego.getJugadas().iterator();
-        while(iter.hasNext()){
-            Jugada j = iter.next();
-            if(j.getJugador().equals(userName) 
-                    && j.getResultado().equals(Resultados.EN_JUEGO)) {
-                jugadaActiva = j;
-                iter.remove();
-            }
+        if(this.croupierSiguePidiendo(jugadaCartas)) {
+            this.pedirCartaCroupier(idJugada);
         }
-        return jugadaActiva;
-    }
-    
-    private Carta pedirCarta(Jugada jugada) {
-        
-        int numCarta = (int)(Math.random()* 52 + 1);
-        if(estaRepetida(numCarta, jugada)) {
-            pedirCarta(jugada);
-        }
-        return baraja.getCartas().get(numCarta - 1);
-    }
-    
-    private boolean estaRepetida(int idCarta, Jugada jugada) {
-        for(Carta c : jugada.getCartasCroupier()) {
-            if(c.getId() == idCarta) {
-                return true;
-            }
-        }
-        for(Carta c : jugada.getCartasJugador()) {
-            if(c.getId() == idCarta) {
-                return true;
-            }
-        }
-        return false;
-    }
-    
-    private Carta iniciarCroupier() {
-        int numCarta = (int)(Math.random()* 52 + 1);
-        return baraja.getCartas().get(numCarta - 1);
     }
     
     private boolean seguirJugando(List<Integer> totales) {
@@ -164,48 +133,120 @@ public class JuegoServiceImpl implements JuegoService{
         return false;
     }
     
-    private boolean croupierSiguePidiendo(Jugada jugada) {
-        int mejorTotalJug = jugadaService.getMejorJugada(jugada.getCartasJugador());
+    private boolean croupierSiguePidiendo(List<JugadaPorCarta> jugadas) {
+        List<Long> cartasCr = new ArrayList();
+        List<Long> cartasJug = new ArrayList();
+        
+        for(JugadaPorCarta j : jugadas) {
+            if(j.getDe().equals(TipoJugador.C)) {
+                cartasCr.add(j.getIdCarta());
+            } else if(j.getDe().equals(TipoJugador.J)) {
+                cartasJug.add(j.getIdCarta());
+            }
+        }
+        List<Carta> cartasJugador = cartaService.obtenerCartasPorIds(cartasJug);
+        List<Carta> cartasCroup = cartaService.obtenerCartasPorIds(cartasCr);
+        
+        int mejorTotalJug = getMejorJugada(cartasJugador);
         if(mejorTotalJug == 0 ) {
           return false;
         }
-        int mejorTotalCr = jugadaService.getMejorJugada(jugada.getCartasCroupier());
+        int mejorTotalCr = getMejorJugada(cartasCroup);
         if(mejorTotalCr == 0) {
           return false;
         }
-        if(mejorTotalJug > mejorTotalCr) {
-          return true;
-        }
-        return false;
+        return mejorTotalJug > mejorTotalCr;
     }
     
-    private JugadaDTO finalizarJuego(Jugada jugada) {
-        int mejorTotalJug = jugadaService.getMejorJugada(jugada.getCartasJugador());
-        int mejorTotalCr = jugadaService.getMejorJugada(jugada.getCartasCroupier());
-        if(mejorTotalJug > mejorTotalCr) {
-            jugada.setResultado(Resultados.GANO);
-            return this.crearResponse(jugada);
-        } else {
-            jugada.setResultado(Resultados.PERDIO);
-            return this.crearResponse(jugada);
-        }
-    }
-    
-    private JugadaDTO crearResponse(Jugada jugada) {
-        List<Integer> totalJug = jugadaService.getTotales(jugada, TipoJugador.JUGADOR);
-        List<Integer> totalCrou = jugadaService.getTotales(jugada, TipoJugador.CROUPIER);
+    private JugadaDTO finalizarJuego(List<JugadaPorCarta> jugadas, Long jugadaId) {
+        List<Long> cartasCr = new ArrayList();
+        List<Long> cartasJug = new ArrayList();
         
-        juego.getJugadas().add(jugada);
+        for(JugadaPorCarta j : jugadas) {
+            if(j.getDe().equals(TipoJugador.C)) {
+                cartasCr.add(j.getIdCarta());
+            } else if(j.getDe().equals(TipoJugador.J)) {
+                cartasJug.add(j.getIdCarta());
+            }
+        }
+        
+        List<Carta> cartasJugador = cartaService.obtenerCartasPorIds(cartasJug);
+        List<Carta> cartasCroup = cartaService.obtenerCartasPorIds(cartasCr);
+        
+        int totalFinalJug = getUltimoTotal(cartasJugador);
+        int totalFinalCr = getUltimoTotal(cartasCroup);
+        
+        int mejorTotalJug = getMejorJugada(cartasJugador);
+        int mejorTotalCr = getMejorJugada(cartasCroup);
+        
+        Resultados resultado = (mejorTotalJug > mejorTotalCr) 
+                ? (Resultados.GANO) : Resultados.PERDIO;
+        
+        jugadaService.updateResultado(jugadas.get(0).getIdJugada(), 
+                resultado, totalFinalCr, totalFinalJug);
+        
+        return generarResponse(jugadas, jugadaId, resultado);
+    }
+    
+    private int getUltimoTotal(List<Carta> cartas) {
+        List<Integer> totales = getTotales(cartas);
+        
+        return (totales.size() > 1 && totales.get(1) < 22) 
+                ? totales.get(1) : totales.get(0);
+    }
+    
+    private List<Integer> getTotales(List<Carta> cartas) {
+        List<Integer> totList = new ArrayList();
+        int total = 0;
+        boolean tieneAs = false;
+        for(Carta c : cartas) {
+            total += c.getValor();
+            if(c.getValor() == 1) {
+                tieneAs = true;
+            }
+        }
+        totList.add(total);
+        if(tieneAs) {
+            totList.add(total + 10);
+        }
+        return totList; 
+    }
+    
+    private Integer getMejorJugada(List<Carta> cartas) {
+        int mejor = 0;
+        List<Integer> totales = this.getTotales(cartas);
+        for(Integer t : totales) {
+            if(t < 22 && t > mejor) {
+                mejor = t;
+            }
+        }
+        return mejor;
+    }
+     
+     private JugadaDTO generarResponse(List<JugadaPorCarta> jugadas,
+             Long idJugada, Resultados resultado) {
+        List<Long> cartasCr = new ArrayList();
+        List<Long> cartasJug = new ArrayList();
+        
+        for(JugadaPorCarta j : jugadas) {
+            if(j.getDe().equals(TipoJugador.C)) {
+                cartasCr.add(j.getIdCarta());
+            } else if(j.getDe().equals(TipoJugador.J)) {
+                cartasJug.add(j.getIdCarta());
+            }
+        }
+        
+        List<Carta> cartasJugador = cartaService.obtenerCartasPorIds(cartasJug);
+        List<Carta> cartasCroup = cartaService.obtenerCartasPorIds(cartasCr);
         
         return JugadaDTO.builder()
-                .id(jugada.getId())
-                .cartasCroupier(jugada.getCartasCroupier().stream().map(c -> c.getId()).collect(Collectors.toList()))
-                .cartasJugador(jugada.getCartasJugador().stream().map(c -> c.getId()).collect(Collectors.toList()))
-                .jugador(jugada.getJugador())
-                .resultado(jugada.getResultado())
-                .totales(totalJug)
-                .totalCroupier(totalCrou)
+                .id(idJugada)
+                .resultado(resultado)
+                .cartasCroupier(cartasCr)
+                .cartasJugador(cartasJug)
+                .totales(getTotales(cartasJugador))
+                .totalCroupier(getTotales(cartasCroup))
                 .build();
-    }
+     }
     
 }

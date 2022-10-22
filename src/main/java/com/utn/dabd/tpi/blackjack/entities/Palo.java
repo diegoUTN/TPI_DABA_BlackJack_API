@@ -1,0 +1,16 @@
+package com.utn.dabd.tpi.blackjack.entities;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import lombok.Data;
+
+@Data
+@Entity(name = "PALO")
+public class Palo {
+    @Id
+    @Column(name = "codigo")
+    private String codigo;
+    @Column(name = "nombre")
+    private String nombre;
+}

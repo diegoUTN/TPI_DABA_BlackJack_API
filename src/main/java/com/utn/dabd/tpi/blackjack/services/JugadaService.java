@@ -1,13 +1,15 @@
 package com.utn.dabd.tpi.blackjack.services;
 
-import com.utn.dabd.tpi.blackjack.dto.TipoJugador;
-import com.utn.dabd.tpi.blackjack.model.Carta;
-import com.utn.dabd.tpi.blackjack.model.Jugada;
-import java.util.List;
+import com.utn.dabd.tpi.blackjack.entities.Jugada;
+import com.utn.dabd.tpi.blackjack.dto.Resultados;
 
 public interface JugadaService {
     
-    List<Integer> getTotales(Jugada jugada, TipoJugador tipo);
+    Jugada crearJugada(Jugada jugada);
     
-    Integer getMejorJugada(List<Carta> cartas);
+    Jugada obtenerJugadaPorId(Long id);
+    
+    Jugada recuperarJugadaActiva(Long playerId, Resultados resultado);
+    
+    void updateResultado(Long id, Resultados resultado, int totalCr, int totalJu);
 }

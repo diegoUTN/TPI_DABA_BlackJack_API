@@ -4,7 +4,7 @@ import com.utn.dabd.tpi.blackjack.dto.JugadaDTO;
 
 public interface JuegoService {
     
-    JugadaDTO iniciarJugada(String userName);
+    JugadaDTO iniciarJugada(Long userId);
     
     JugadaDTO pedirCarta(Long idJugada);
     

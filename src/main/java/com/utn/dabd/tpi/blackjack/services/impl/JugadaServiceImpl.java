@@ -1,59 +1,46 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package com.utn.dabd.tpi.blackjack.services.impl;
 
-import com.utn.dabd.tpi.blackjack.dto.TipoJugador;
-import com.utn.dabd.tpi.blackjack.model.Carta;
-import com.utn.dabd.tpi.blackjack.model.Jugada;
+import com.utn.dabd.tpi.blackjack.entities.Jugada;
+import com.utn.dabd.tpi.blackjack.dto.Resultados;
+import com.utn.dabd.tpi.blackjack.repository.JugadaRepository;
 import com.utn.dabd.tpi.blackjack.services.JugadaService;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Optional;
+import javax.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class JugadaServiceImpl implements JugadaService {
-
-    @Override
-    public List<Integer> getTotales(Jugada jugada, TipoJugador tipo) {
-        List<Carta> cartas = (tipo.equals(TipoJugador.JUGADOR)) 
-                ? jugada.getCartasJugador() : jugada.getCartasCroupier();
-        return getTotales(cartas);
-    }
+    
+    private final JugadaRepository jugadaRepository;
     
     @Override
-    public Integer getMejorJugada(List<Carta> cartas) {
-        int mejor = 0;
-        List<Integer> totales = this.getTotales(cartas);
-        for(Integer t : totales) {
-            if(t < 22 && t > mejor) {
-                mejor = t;
-            }
-        }
-        return mejor;
+    public Jugada crearJugada(Jugada jugada) {
+        return jugadaRepository.save(jugada);
     }
     
-    
-    private List<Integer> getTotales(List<Carta> cartas) {
-        int total = 0;
-        List<Integer> totList = new ArrayList();
-        for(Carta c : cartas) {
-            total += c.getValor();
+    @Override
+    public Jugada obtenerJugadaPorId(Long id) {
+        Optional<Jugada> opJugada = jugadaRepository.findById(id);
+        if(opJugada.isPresent()) {
+            return opJugada.get();
         }
-        totList.add(total);
-        if(tieneAs(cartas)) {
-            totList.add(total + 10);
-        }
-        return totList;
+        throw new EntityNotFoundException("No Existe Jugada: " + id);
     }
     
-    private boolean tieneAs(List<Carta> cartas) {
-        for(Carta c : cartas) {
-            if(c.getValor() == 1) {
-                return true;
-            }
-        }
-        return false;
+    @Override
+    public Jugada recuperarJugadaActiva(Long playerId, Resultados resultado) {
+        return jugadaRepository.findByIdPlayerAndResultado(playerId, resultado);
+    }
+    
+    @Override
+    public void updateResultado(Long id, Resultados resultado, int totalCr, int totalJu) {
+        Jugada jugada = this.obtenerJugadaPorId(id);
+        jugada.setResultado(resultado);
+        jugada.setTotalCroupier(totalCr);
+        jugada.setTotalJugador(totalJu);
+        
+        this.crearJugada(jugada);
     }
 }

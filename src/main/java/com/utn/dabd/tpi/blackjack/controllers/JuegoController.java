@@ -18,9 +18,9 @@ public class JuegoController {
     
     private final JuegoService juegoService;
     
-    @GetMapping("/iniciar/{userName}")
-    ResponseEntity<JugadaDTO> iniciarJugada(@PathVariable String userName) {
-        JugadaDTO inicial = juegoService.iniciarJugada(userName);
+    @GetMapping("/iniciar/{userId}")
+    ResponseEntity<JugadaDTO> iniciarJugada(@PathVariable Long userId) {
+        JugadaDTO inicial = juegoService.iniciarJugada(userId);
         
         return ResponseEntity.ok(inicial);
     }
