@@ -14,7 +14,7 @@ public class PlayerServiceImpl implements PlayerService {
     private final PlayerRepository playerRepository;
     
     @Override
-    public void agregarPlayer(String user, String password) {
+    public Player agregarPlayer(String user, String password) {
         
         Player p = playerRepository.findByUsername(user);
         if(p != null) {
@@ -24,7 +24,7 @@ public class PlayerServiceImpl implements PlayerService {
         player.setUsername(user);
         player.setPassword(password);
         
-        playerRepository.save(player);
+        return playerRepository.save(player);
     }
 
     @Override

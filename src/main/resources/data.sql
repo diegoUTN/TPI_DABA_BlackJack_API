@@ -1,7 +1,7 @@
-CREATE SCHEMA tpi_dabd_blackjack
-use tpi_dabd_blackjack
+# CREATE SCHEMA tpi_dabd_blackjack
+# USE tpi_dabd_blackjack
 
-#PALOS
+# PALOS
 INSERT into PALO values ("C", "Corazones");
 INSERT into PALO values ("D", "Diamantes");
 INSERT into PALO values ("P", "Picas");

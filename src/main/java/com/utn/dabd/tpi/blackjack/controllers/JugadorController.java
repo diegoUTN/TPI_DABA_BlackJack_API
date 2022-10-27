@@ -39,13 +39,16 @@ public class JugadorController {
     }
     
     @PostMapping()
-    ResponseEntity<Void> createUser(
+    ResponseEntity<com.utn.dabd.tpi.blackjack.dto.Player> createUser(
             @RequestBody LoginRequestDTO loginRequestDTO) {
         String userName = loginRequestDTO.getUsername();
         String password = loginRequestDTO.getPassword();
         
-        playerService.agregarPlayer(userName, password);
+        com.utn.dabd.tpi.blackjack.entities.Player player = 
+                playerService.agregarPlayer(userName, password);
+        com.utn.dabd.tpi.blackjack.dto.Player result = 
+                modelMapper.map(player, com.utn.dabd.tpi.blackjack.dto.Player.class);
         
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(result);
     }
 }
